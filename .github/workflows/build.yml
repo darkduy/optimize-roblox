@@ -1,0 +1,180 @@
+# .github/workflows/build.yml
+name: Build Roblox Optimizer
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+env:
+  CMAKE_VERSION: 3.16.0
+  NINJA_VERSION: 1.10.0
+
+jobs:
+  # Windows Build
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, x86]
+        config: [Release, Debug]
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1.13
+      with:
+        cmake-version: ${{ env.CMAKE_VERSION }}
+
+    - name: Configure CMake (Windows)
+      run: |
+        cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+
+    - name: Build Windows
+      run: cmake --build build --config ${{ matrix.config }}
+
+    - name: Package Windows
+      run: |
+        mkdir artifacts/windows-${{ matrix.arch }}-${{ matrix.config }}
+        copy build/${{ matrix.config }}/RobloxOptimizer.exe artifacts/windows-${{ matrix.arch }}-${{ matrix.config }}/
+        copy README.md artifacts/windows-${{ matrix.arch }}-${{ matrix.config }}/
+
+    - name: Upload Windows Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: roblox-optimizer-windows-${{ matrix.arch }}-${{ matrix.config }}
+        path: artifacts/windows-${{ matrix.arch }}-${{ matrix.config }}/
+
+  # Android Build
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86, x86_64]
+        config: [Release, Debug]
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+
+    - name: Setup Android NDK
+      run: |
+        echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk-bundle" >> $GITHUB_ENV
+
+    - name: Install NDK
+      run: |
+        $ANDROID_SDK_ROOT/tools/bin/sdkmanager "ndk;21.4.7075529"
+        echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/21.4.7075529" >> $GITHUB_ENV
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1.13
+      with:
+        cmake-version: ${{ env.CMAKE_VERSION }}
+
+    - name: Configure CMake (Android)
+      run: |
+        cmake -B build-android \
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=${{ matrix.abi }} \
+          -DANDROID_NATIVE_API_LEVEL=21 \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DANDROID_BUILD=ON
+
+    - name: Build Android
+      run: cmake --build build-android --config ${{ matrix.config }}
+
+    - name: Package Android
+      run: |
+        mkdir -p artifacts/android-${{ matrix.abi }}-${{ matrix.config }}
+        cp build-android/RobloxOptimizerAndroid artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/
+        cp README.md artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/
+
+    - name: Upload Android Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: roblox-optimizer-android-${{ matrix.abi }}-${{ matrix.config }}
+        path: artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/
+
+  # Linux Build (for testing)
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config: [Release, Debug]
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build
+
+    - name: Configure CMake (Linux)
+      run: |
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DLINUX_BUILD=ON
+
+    - name: Build Linux
+      run: cmake --build build
+
+    - name: Upload Linux Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: roblox-optimizer-linux-${{ matrix.config }}
+        path: build/RobloxOptimizerLinux
+
+  # Create Release
+  create-release:
+    if: github.event_name == 'release'
+    needs: [build-windows, build-android, build-linux]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create release packages
+      run: |
+        # Windows packages
+        for arch in x64 x86; do
+          for config in Release Debug; do
+            zip -r roblox-optimizer-windows-${arch}-${config}.zip roblox-optimizer-windows-${arch}-${config}/
+          done
+        done
+        
+        # Android packages
+        for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+          for config in Release Debug; do
+            tar -czf roblox-optimizer-android-${abi}-${config}.tar.gz roblox-optimizer-android-${abi}-${config}/
+          done
+        done
+
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          *.zip
+          *.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
