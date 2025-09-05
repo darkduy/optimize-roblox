@@ -1,4 +1,3 @@
-
 # CMakeLists.txt
 cmake_minimum_required(VERSION 3.16)
 project(RobloxOptimizer VERSION 1.0.0 LANGUAGES CXX)
@@ -6,16 +5,30 @@ project(RobloxOptimizer VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Platform detection
+# Platform detection and validation
 if(ANDROID)
     set(ANDROID_BUILD ON)
-    message(STATUS "Building for Android")
+    message(STATUS "Building for Android 8.0+ (API 26+)")
+    
+    # Validate Android API level
+    if(ANDROID_NATIVE_API_LEVEL LESS 26)
+        message(FATAL_ERROR "Android API Level 26+ required (Android 8.0+). Current: ${ANDROID_NATIVE_API_LEVEL}")
+    endif()
+    
 elseif(WIN32)
     set(WINDOWS_BUILD ON)
-    message(STATUS "Building for Windows")
-elseif(UNIX)
-    set(LINUX_BUILD ON)
-    message(STATUS "Building for Linux")
+    message(STATUS "Building for Windows 10/11 (x64 only)")
+    
+    # Ensure we're building for x64 only
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        message(FATAL_ERROR "32-bit Windows builds not supported. Roblox requires 64-bit Windows.")
+    endif()
+    
+    # Set Windows 10 as minimum target
+    add_compile_definitions(_WIN32_WINNT=0x0A00)  # Windows 10
+    
+else()
+    message(FATAL_ERROR "Unsupported platform. Only Windows 10/11 (x64) and Android 8.0+ are supported.")
 endif()
 
 # Include directories
@@ -33,13 +46,7 @@ set(COMMON_SOURCES
 
 # Create directories if they don't exist
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/windows)
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/android)
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/linux)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/common)
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/windows)
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/android)
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/linux)
 
 # Check if source files exist, create empty ones if not
 set(REQUIRED_FILES
@@ -48,8 +55,13 @@ set(REQUIRED_FILES
     "src/common/Config.cpp"
 )
 
-# Windows build
+# Windows build (Windows 10/11 x64 only)
 if(WINDOWS_BUILD)
+    message(STATUS "Configuring Windows build for modern systems...")
+    
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/windows)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/windows)
+    
     list(APPEND REQUIRED_FILES
         "src/windows/WindowsOptimizer.cpp"
         "src/windows/ProcessManager.cpp"
@@ -60,8 +72,13 @@ if(WINDOWS_BUILD)
     # Create files if they don't exist
     foreach(file ${REQUIRED_FILES})
         if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${file})
-            file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${file} 
-                "// Placeholder file - implement functionality here\n#ifdef WINDOWS_BUILD\n// Windows implementation\n#endif\n")
+            if(${file} MATCHES "main_windows.cpp")
+                file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${file} 
+                    "// Windows main - Windows 10/11 x64 only\n#ifdef WINDOWS_BUILD\n#include <iostream>\nint main() {\n    std::cout << \"Roblox Optimizer for Windows 10/11 x64\" << std::endl;\n    return 0;\n}\n#endif\n")
+            else()
+                file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${file} 
+                    "// Windows implementation - Windows 10/11 x64 only\n#ifdef WINDOWS_BUILD\n// Implementation here\n#endif\n")
+            endif()
         endif()
     endforeach()
     
@@ -77,11 +94,15 @@ if(WINDOWS_BUILD)
         ${WINDOWS_SOURCES}
     )
     
+    # Windows 10/11 specific libraries
     target_link_libraries(RobloxOptimizer 
         psapi
         advapi32
         kernel32
         user32
+        version
+        winmm
+        dwmapi  # For modern Windows features
     )
     
     target_include_directories(RobloxOptimizer PRIVATE 
@@ -90,12 +111,23 @@ if(WINDOWS_BUILD)
     
     target_compile_definitions(RobloxOptimizer PRIVATE 
         WINDOWS_BUILD=1
+        TARGET_WINDOWS_10_PLUS=1
         UNICODE=1
         _UNICODE=1
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
     )
+    
+    # Set Windows 10 compatibility
+    set_property(TARGET RobloxOptimizer PROPERTY WIN32_EXECUTABLE TRUE)
 
-# Android build
+# Android build (Android 8.0+ API 26+)
 elseif(ANDROID_BUILD)
+    message(STATUS "Configuring Android build for modern devices...")
+    
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/android)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/android)
+    
     list(APPEND REQUIRED_FILES
         "src/android/AndroidOptimizer.cpp"
         "src/android/SystemManager.cpp"
@@ -106,7 +138,7 @@ elseif(ANDROID_BUILD)
     foreach(file ${REQUIRED_FILES})
         if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${file})
             file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${file} 
-                "// Placeholder file - implement functionality here\n#ifdef ANDROID_BUILD\n// Android implementation\n#endif\n")
+                "// Android implementation - Android 8.0+ (API 26+)\n#ifdef ANDROID_BUILD\n// Implementation here\n#endif\n")
         endif()
     endforeach()
     
@@ -121,6 +153,7 @@ elseif(ANDROID_BUILD)
         ${ANDROID_SOURCES}
     )
     
+    # Find Android libraries
     find_library(log-lib log)
     find_library(android-lib android)
     
@@ -135,117 +168,13 @@ elseif(ANDROID_BUILD)
     
     target_compile_definitions(RobloxOptimizerAndroid PRIVATE 
         ANDROID_BUILD=1
-    )
-
-# Linux build (for testing/development)
-elseif(LINUX_BUILD)
-    list(APPEND REQUIRED_FILES
-        "src/linux/LinuxOptimizer.cpp"
-        "src/linux/ProcessManager.cpp"
-        "src/linux/main_linux.cpp"
+        TARGET_ANDROID_8_PLUS=1
+        __ANDROID_API__=${ANDROID_NATIVE_API_LEVEL}
     )
     
-    # Create files if they don't exist
-    foreach(file ${REQUIRED_FILES})
-        if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${file})
-            file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${file} 
-                "// Placeholder file - implement functionality here\n#ifdef LINUX_BUILD\n// Linux implementation\nint main() { return 0; }\n#endif\n")
-        endif()
-    endforeach()
-    
-    set(LINUX_SOURCES
-        src/linux/LinuxOptimizer.cpp
-        src/linux/ProcessManager.cpp
-        src/linux/main_linux.cpp
-    )
-    
-    add_executable(RobloxOptimizerLinux
-        ${COMMON_SOURCES}
-        ${LINUX_SOURCES}
-    )
-    
-    target_link_libraries(RobloxOptimizerLinux
-        pthread
-    )
-    
-    target_include_directories(RobloxOptimizerLinux PRIVATE 
-        include/linux
-    )
-    
-    target_compile_definitions(RobloxOptimizerLinux PRIVATE 
-        LINUX_BUILD=1
-    )
-endif()
-
-# Create header files if they don't exist
-set(HEADER_FILES
-    "include/common/Logger.h"
-    "include/common/Utils.h"
-    "include/common/Config.h"
-    "include/common/BaseOptimizer.h"
-)
-
-if(WINDOWS_BUILD)
-    list(APPEND HEADER_FILES
-        "include/windows/WindowsOptimizer.h"
-        "include/windows/ProcessManager.h"
-        "include/windows/RegistryManager.h"
-    )
-elseif(ANDROID_BUILD)
-    list(APPEND HEADER_FILES
-        "include/android/AndroidOptimizer.h"
-        "include/android/SystemManager.h"
-    )
-endif()
-
-foreach(header ${HEADER_FILES})
-    if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${header})
-        file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${header} 
-            "#pragma once\n// Header file - define interfaces here\n")
-    endif()
-endforeach()
-
-# Compiler-specific options
-if(MSVC)
-    if(TARGET RobloxOptimizer)
-        target_compile_options(RobloxOptimizer PRIVATE /W4)
-    endif()
-else()
-    set(targets)
-    if(TARGET RobloxOptimizer)
-        list(APPEND targets RobloxOptimizer)
-    endif()
-    if(TARGET RobloxOptimizerAndroid)
-        list(APPEND targets RobloxOptimizerAndroid)
-    endif()
-    if(TARGET RobloxOptimizerLinux)
-        list(APPEND targets RobloxOptimizerLinux)
+    # Android 8.0+ specific features
+    if(ANDROID_NATIVE_API_LEVEL GREATER_EQUAL 26)
+        target_compile_definitions(RobloxOptimizerAndroid PRIVATE ANDROID_8_FEATURES=1)
     endif()
     
-    foreach(target ${targets})
-        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
-    endforeach()
-endif()
-
-# Build type specific settings
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    if(TARGET RobloxOptimizer)
-        target_compile_definitions(RobloxOptimizer PRIVATE DEBUG=1)
-    endif()
-    if(TARGET RobloxOptimizerAndroid)
-        target_compile_definitions(RobloxOptimizerAndroid PRIVATE DEBUG=1)
-    endif()
-    if(TARGET RobloxOptimizerLinux)
-        target_compile_definitions(RobloxOptimizerLinux PRIVATE DEBUG=1)
-    endif()
-else()
-    if(TARGET RobloxOptimizer)
-        target_compile_definitions(RobloxOptimizer PRIVATE NDEBUG=1)
-    endif()
-    if(TARGET RobloxOptimizerAndroid)
-        target_compile_definitions(RobloxOptimizerAndroid PRIVATE NDEBUG=1)
-    endif()
-    if(TARGET RobloxOptimizerLinux)
-        target_compile_definitions(RobloxOptimizerLinux PRIVATE NDEBUG=1)
-    endif()
-endif()
+    if(ANDROID_NATIVE_API_LEVEL GREATER_EQUAL 28)
