@@ -68,13 +68,13 @@ jobs:
         name: roblox-optimizer-windows-${{ matrix.arch }}-${{ matrix.config }}
         path: artifacts/windows-${{ matrix.arch }}-${{ matrix.config }}/
 
-  # Android Build
+  # Android Build (Android 8.0+ only - API Level 26+)
   build-android:
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        abi: [armeabi-v7a, arm64-v8a, x86, x86_64]
+        abi: [arm64-v8a, x86_64]  # Only modern architectures
         config: [Release, Debug]
 
     steps:
@@ -92,7 +92,7 @@ jobs:
 
     - name: Install Android NDK
       run: |
-        echo "Installing Android NDK..."
+        echo "Installing Android NDK for modern Android devices..."
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;25.2.9519653" || true
         echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> $GITHUB_ENV
         ls -la $ANDROID_HOME/ndk/ || true
@@ -110,13 +110,15 @@ jobs:
 
     - name: Configure CMake (Android)
       run: |
+        echo "Building for Android 8.0+ (API 26) with ABI: ${{ matrix.abi }}"
         cmake -B build-android-${{ matrix.abi }} \
           -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
           -DANDROID_ABI=${{ matrix.abi }} \
-          -DANDROID_NATIVE_API_LEVEL=21 \
+          -DANDROID_NATIVE_API_LEVEL=26 \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DANDROID_BUILD=ON \
-          -DCMAKE_ANDROID_STL_TYPE=c++_shared
+          -DCMAKE_ANDROID_STL_TYPE=c++_shared \
+          -DTARGET_ANDROID_8_PLUS=ON
 
     - name: Build Android
       run: cmake --build build-android-${{ matrix.abi }} --config ${{ matrix.config }} --parallel 4
@@ -126,6 +128,7 @@ jobs:
         mkdir -p artifacts/android-${{ matrix.abi }}-${{ matrix.config }}
         
         # Look for the built library
+        echo "Searching for built Android library..."
         find build-android-${{ matrix.abi }} -name "*.so" -type f || echo "No .so files found"
         
         if [ -f "build-android-${{ matrix.abi }}/libRobloxOptimizerAndroid.so" ]; then
@@ -139,6 +142,25 @@ jobs:
         if [ -f "README.md" ]; then
           cp README.md artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/
         fi
+        
+        # Create Android app info
+        cat > artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/ANDROID_INFO.txt << EOF
+Android Roblox Optimizer
+========================
+Target: Android 8.0+ (API Level 26+)
+Architecture: ${{ matrix.abi }}
+Build Type: ${{ matrix.config }}
+
+Requirements:
+- Android 8.0 Oreo or higher
+- ARM64 or x86_64 processor
+- Roblox app installed
+
+Installation:
+1. Install APK from releases
+2. Grant necessary permissions
+3. Run optimizer before launching Roblox
+EOF
 
     - name: Upload Android Artifacts
       uses: actions/upload-artifact@v4
@@ -146,61 +168,10 @@ jobs:
         name: roblox-optimizer-android-${{ matrix.abi }}-${{ matrix.config }}
         path: artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/
 
-  # Linux Build (for testing)
-  build-linux:
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [Release, Debug]
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build
-
-    - name: Setup CMake
-      uses: jwlawson/actions-setup-cmake@v2
-      with:
-        cmake-version: ${{ env.CMAKE_VERSION }}
-
-    - name: Configure CMake (Linux)
-      run: |
-        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DLINUX_BUILD=ON
-
-    - name: Build Linux
-      run: cmake --build build --parallel 4
-
-    - name: Package Linux
-      run: |
-        mkdir -p artifacts/linux-${{ matrix.config }}
-        
-        if [ -f "build/RobloxOptimizerLinux" ]; then
-          cp build/RobloxOptimizerLinux artifacts/linux-${{ matrix.config }}/
-          echo "✅ RobloxOptimizerLinux found and copied"
-        else
-          echo "❌ RobloxOptimizerLinux not found"
-          ls -la build/ || true
-        fi
-        
-        if [ -f "README.md" ]; then
-          cp README.md artifacts/linux-${{ matrix.config }}/
-        fi
-
-    - name: Upload Linux Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: roblox-optimizer-linux-${{ matrix.config }}
-        path: artifacts/linux-${{ matrix.config }}/
-
   # Create Release
   create-release:
     if: github.event_name == 'release'
-    needs: [build-windows, build-android, build-linux]
+    needs: [build-windows, build-android]
     runs-on: ubuntu-22.04
     
     steps:
@@ -218,26 +189,18 @@ jobs:
       run: |
         cd artifacts
         
-        # Windows packages
+        # Windows packages (Windows 10/11 only)
         for dir in roblox-optimizer-windows-*; do
           if [ -d "$dir" ]; then
-            echo "Creating package for $dir"
+            echo "Creating Windows package for $dir (Windows 10/11 compatible)"
             zip -r "${dir}.zip" "$dir"
           fi
         done
         
-        # Android packages  
+        # Android packages (Android 8.0+ only)
         for dir in roblox-optimizer-android-*; do
           if [ -d "$dir" ]; then
-            echo "Creating package for $dir"
-            tar -czf "${dir}.tar.gz" "$dir"
-          fi
-        done
-        
-        # Linux packages
-        for dir in roblox-optimizer-linux-*; do
-          if [ -d "$dir" ]; then
-            echo "Creating package for $dir"
+            echo "Creating Android package for $dir (Android 8.0+ compatible)"
             tar -czf "${dir}.tar.gz" "$dir"
           fi
         done
@@ -252,13 +215,37 @@ jobs:
         files: |
           artifacts/*.zip
           artifacts/*.tar.gz
+        body: |
+          ## 🎮 Roblox System Optimizer
+
+          ### 🖥️ Windows (x64 only)
+          - **Requirements**: Windows 10 version 1903 or Windows 11
+          - **Architecture**: 64-bit only (Roblox requirement)
+          - **Features**: Process optimization, memory management, registry tweaks
+
+          ### 📱 Android (Modern devices)
+          - **Requirements**: Android 8.0 Oreo (API 26) or higher
+          - **Architecture**: ARM64 (arm64-v8a) and x86_64 only
+          - **Features**: CPU/GPU governor optimization, system tweaks
+
+          ### ❌ Unsupported Platforms
+          - Windows 7/8/8.1 (Roblox discontinued support)
+          - 32-bit Windows (Roblox discontinued support)
+          - Android 7.x and below (performance limitations)
+          - Linux (Roblox not available)
+
+          ### 🛡️ Safety & Compliance
+          - ✅ No game file modification
+          - ✅ No code injection
+          - ✅ Roblox ToS compliant
+          - ✅ Uses only public OS APIs
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Build summary
   build-summary:
     if: always()
-    needs: [build-windows, build-android, build-linux]
+    needs: [build-windows, build-android]
     runs-on: ubuntu-22.04
     
     steps:
@@ -266,13 +253,18 @@ jobs:
       run: |
         echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Windows  | ${{ needs.build-windows.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Android  | ${{ needs.build-android.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY  
-        echo "| Linux    | ${{ needs.build-linux.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎯 Supported Platforms" >> $GITHUB_STEP_SUMMARY
+        echo "| Platform | Status | Requirements |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|--------|--------------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Windows x64 | ${{ needs.build-windows.result == 'success' && '✅ Success' || '❌ Failed' }} | Windows 10/11 only |" >> $GITHUB_STEP_SUMMARY
+        echo "| Android ARM64 | ${{ needs.build-android.result == 'success' && '✅ Success' || '❌ Failed' }} | Android 8.0+ (API 26+) |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- Windows: RobloxOptimizer.exe" >> $GITHUB_STEP_SUMMARY
-        echo "- Android: libRobloxOptimizerAndroid.so" >> $GITHUB_STEP_SUMMARY
-        echo "- Linux: RobloxOptimizerLinux" >> $GITHUB_STEP_SUMMARY
+        echo "### ❌ Unsupported Platforms" >> $GITHUB_STEP_SUMMARY
+        echo "- Windows 7/8/8.1 (Roblox discontinued)" >> $GITHUB_STEP_SUMMARY
+        echo "- 32-bit Windows (Roblox discontinued)" >> $GITHUB_STEP_SUMMARY
+        echo "- Android 7.x and below (limited performance)" >> $GITHUB_STEP_SUMMARY
+        echo "- Linux (Roblox not available)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Build Artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "- **Windows**: RobloxOptimizer.exe (x64 only)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Android**: libRobloxOptimizerAndroid.so (ARM64, x86_64)" >> $GITHUB_STEP_SUMMARY
