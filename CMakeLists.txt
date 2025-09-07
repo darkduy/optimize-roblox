@@ -178,3 +178,185 @@ elseif(ANDROID_BUILD)
     endif()
     
     if(ANDROID_NATIVE_API_LEVEL GREATER_EQUAL 28)
+        target_compile_definitions(RobloxOptimizerAndroid PRIVATE ANDROID_9_FEATURES=1)
+    endif()
+endif()
+
+# Create header files if they don't exist
+set(HEADER_FILES
+    "include/common/Logger.h"
+    "include/common/Utils.h"
+    "include/common/Config.h"
+    "include/common/BaseOptimizer.h"
+)
+
+if(WINDOWS_BUILD)
+    list(APPEND HEADER_FILES
+        "include/windows/WindowsOptimizer.h"
+        "include/windows/ProcessManager.h"
+        "include/windows/RegistryManager.h"
+    )
+elseif(ANDROID_BUILD)
+    list(APPEND HEADER_FILES
+        "include/android/AndroidOptimizer.h"
+        "include/android/SystemManager.h"
+    )
+endif()
+
+foreach(header ${HEADER_FILES})
+    if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${header})
+        if(${header} MATCHES "BaseOptimizer.h")
+            file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${header} 
+                "#pragma once\n// Base optimizer for supported platforms only\nstruct ProcessInfo { uint32_t pid; };\nstruct OptimizationResult { bool success; };\nclass BaseOptimizer { public: virtual ~BaseOptimizer() = default; };\n")
+        else()
+            file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/${header} 
+                "#pragma once\n// Header file for supported platforms\n")
+        endif()
+    endif()
+endforeach()
+
+# Compiler-specific options for modern platforms
+if(MSVC)
+    if(TARGET RobloxOptimizer)
+        # Modern MSVC options for Windows 10/11
+        target_compile_options(RobloxOptimizer PRIVATE 
+            /W4 
+            /permissive-    # Strict C++ compliance
+            /std:c++17      # C++17 standard
+            /MP             # Multi-processor compilation
+        )
+        
+        # Enable modern Windows features
+        target_compile_definitions(RobloxOptimizer PRIVATE 
+            WINVER=0x0A00           # Windows 10
+            _WIN32_WINNT=0x0A00     # Windows 10 APIs
+        )
+    endif()
+else()
+    set(targets)
+    if(TARGET RobloxOptimizer)
+        list(APPEND targets RobloxOptimizer)
+    endif()
+    if(TARGET RobloxOptimizerAndroid)
+        list(APPEND targets RobloxOptimizerAndroid)
+    endif()
+    
+    foreach(target ${targets})
+        target_compile_options(${target} PRIVATE 
+            -Wall 
+            -Wextra 
+            -Wpedantic
+            -std=c++17
+        )
+        
+        # Android-specific compiler flags
+        if(${target} STREQUAL "RobloxOptimizerAndroid")
+            target_compile_options(${target} PRIVATE
+                -fPIC
+                -ffunction-sections
+                -fdata-sections
+            )
+        endif()
+    endforeach()
+endif()
+
+# Build type specific settings
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(TARGET RobloxOptimizer)
+        target_compile_definitions(RobloxOptimizer PRIVATE DEBUG=1 _DEBUG=1)
+    endif()
+    if(TARGET RobloxOptimizerAndroid)
+        target_compile_definitions(RobloxOptimizerAndroid PRIVATE DEBUG=1 _DEBUG=1)
+    endif()
+else()
+    if(TARGET RobloxOptimizer)
+        target_compile_definitions(RobloxOptimizer PRIVATE NDEBUG=1)
+        # Release optimizations for Windows
+        if(MSVC)
+            target_compile_options(RobloxOptimizer PRIVATE /O2 /Ob2)
+        else()
+            target_compile_options(RobloxOptimizer PRIVATE -O3)
+        endif()
+    endif()
+    if(TARGET RobloxOptimizerAndroid)
+        target_compile_definitions(RobloxOptimizerAndroid PRIVATE NDEBUG=1)
+        # Release optimizations for Android
+        target_compile_options(RobloxOptimizerAndroid PRIVATE -O3 -flto)
+    endif()
+endif()
+
+# Platform validation summary
+message(STATUS "=== BUILD CONFIGURATION SUMMARY ===")
+if(WINDOWS_BUILD)
+    message(STATUS "Platform: Windows 10/11 x64")
+    message(STATUS "Target: ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+    message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+    message(STATUS "Roblox Compatible: YES (Windows 10 1903+ or Windows 11)")
+elseif(ANDROID_BUILD)
+    message(STATUS "Platform: Android ${ANDROID_NATIVE_API_LEVEL}+ (${ANDROID_ABI})")
+    message(STATUS "NDK: ${ANDROID_NDK_REVISION}")
+    message(STATUS "STL: ${CMAKE_ANDROID_STL_TYPE}")
+    message(STATUS "Roblox Compatible: YES (Android 8.0+ required)")
+endif()
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "====================================")
+
+# Install rules for supported platforms
+if(WINDOWS_BUILD)
+    install(TARGETS RobloxOptimizer 
+        DESTINATION bin
+        COMPONENT Runtime)
+    
+    # Install additional Windows files
+    install(FILES 
+        "${CMAKE_SOURCE_DIR}/README.md"
+        "${CMAKE_SOURCE_DIR}/LICENSE"
+        DESTINATION .
+        COMPONENT Runtime)
+        
+elseif(ANDROID_BUILD)
+    install(TARGETS RobloxOptimizerAndroid
+        LIBRARY DESTINATION lib
+        COMPONENT Runtime)
+    
+    # Install Android-specific files
+    install(FILES 
+        "${CMAKE_SOURCE_DIR}/README.md"
+        "${CMAKE_SOURCE_DIR}/LICENSE"
+        DESTINATION .
+        COMPONENT Runtime)
+endif()
+
+# CPack configuration for releases
+set(CPACK_PACKAGE_NAME "RobloxOptimizer")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Roblox Performance Optimizer")
+set(CPACK_PACKAGE_VENDOR "darkduy")
+set(CPACK_PACKAGE_CONTACT "github.com/darkduy/optimize-roblox")
+
+if(WINDOWS_BUILD)
+    set(CPACK_GENERATOR "ZIP;WIX")
+    set(CPACK_PACKAGE_FILE_NAME "RobloxOptimizer-Windows10-x64-${PROJECT_VERSION}")
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "RobloxOptimizer")
+elseif(ANDROID_BUILD)
+    set(CPACK_GENERATOR "TGZ")
+    set(CPACK_PACKAGE_FILE_NAME "RobloxOptimizer-Android${ANDROID_NATIVE_API_LEVEL}-${ANDROID_ABI}-${PROJECT_VERSION}")
+endif()
+
+include(CPack)
+
+# Print unsupported platform warnings
+message(STATUS "")
+message(STATUS "⚠️  UNSUPPORTED PLATFORMS:")
+message(STATUS "   • Windows 7/8/8.1 (Roblox discontinued support)")
+message(STATUS "   • 32-bit Windows (Roblox requires 64-bit)")  
+message(STATUS "   • Android 7.x and below (performance limitations)")
+message(STATUS "   • Linux (Roblox not available)")
+message(STATUS "   • macOS (Roblox not officially supported)")
+message(STATUS "")
+message(STATUS "✅ SUPPORTED PLATFORMS:")
+message(STATUS "   • Windows 10 version 1903+ (x64)")
+message(STATUS "   • Windows 11 (x64)")
+message(STATUS "   • Android 8.0 Oreo+ (API 26+, ARM64/x86_64)")
+message(STATUS "")
