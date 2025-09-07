@@ -1,4 +1,3 @@
-# .github/workflows/build.yml
 name: Build Roblox Optimizer
 
 on:
@@ -13,13 +12,13 @@ env:
   CMAKE_VERSION: 3.21.0
 
 jobs:
-  # Windows Build
+  # Windows Build (Windows 10/11 x64 only)
   build-windows:
     runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, Win32]
+        arch: [x64]
         config: [Release, Debug]
     
     steps:
@@ -39,7 +38,7 @@ jobs:
 
     - name: Configure CMake (Windows)
       run: |
-        cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DWINDOWS_BUILD=ON
+        cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DWINDOWS_BUILD=ON -DTARGET_WINDOWS_10_PLUS=ON
 
     - name: Build Windows
       run: cmake --build build --config ${{ matrix.config }} --parallel 4
@@ -68,13 +67,13 @@ jobs:
         name: roblox-optimizer-windows-${{ matrix.arch }}-${{ matrix.config }}
         path: artifacts/windows-${{ matrix.arch }}-${{ matrix.config }}/
 
-  # Android Build (Android 8.0+ only - API Level 26+)
+  # Android Build (Android 8.0+ API 26+)
   build-android:
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        abi: [arm64-v8a, x86_64]  # Only modern architectures
+        abi: [arm64-v8a, x86_64]
         config: [Release, Debug]
 
     steps:
@@ -127,7 +126,6 @@ jobs:
       run: |
         mkdir -p artifacts/android-${{ matrix.abi }}-${{ matrix.config }}
         
-        # Look for the built library
         echo "Searching for built Android library..."
         find build-android-${{ matrix.abi }} -name "*.so" -type f || echo "No .so files found"
         
@@ -143,24 +141,23 @@ jobs:
           cp README.md artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/
         fi
         
-        # Create Android app info
-        cat > artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/ANDROID_INFO.txt << EOF
-Android Roblox Optimizer
-========================
-Target: Android 8.0+ (API Level 26+)
-Architecture: ${{ matrix.abi }}
-Build Type: ${{ matrix.config }}
+        cat > artifacts/android-${{ matrix.abi }}-${{ matrix.config }}/ANDROID_INFO.txt << 'EOF'
+        Android Roblox Optimizer
+        ========================
+        Target: Android 8.0+ (API Level 26+)
+        Architecture: ${{ matrix.abi }}
+        Build Type: ${{ matrix.config }}
 
-Requirements:
-- Android 8.0 Oreo or higher
-- ARM64 or x86_64 processor
-- Roblox app installed
+        Requirements:
+        - Android 8.0 Oreo or higher
+        - ARM64 or x86_64 processor
+        - Roblox app installed
 
-Installation:
-1. Install APK from releases
-2. Grant necessary permissions
-3. Run optimizer before launching Roblox
-EOF
+        Installation:
+        1. Install APK from releases
+        2. Grant necessary permissions
+        3. Run optimizer before launching Roblox
+        EOF
 
     - name: Upload Android Artifacts
       uses: actions/upload-artifact@v4
@@ -189,7 +186,6 @@ EOF
       run: |
         cd artifacts
         
-        # Windows packages (Windows 10/11 only)
         for dir in roblox-optimizer-windows-*; do
           if [ -d "$dir" ]; then
             echo "Creating Windows package for $dir (Windows 10/11 compatible)"
@@ -197,7 +193,6 @@ EOF
           fi
         done
         
-        # Android packages (Android 8.0+ only)
         for dir in roblox-optimizer-android-*; do
           if [ -d "$dir" ]; then
             echo "Creating Android package for $dir (Android 8.0+ compatible)"
@@ -205,7 +200,6 @@ EOF
           fi
         done
         
-        # List created packages
         echo "Created packages:"
         ls -la *.zip *.tar.gz || echo "No packages created"
 
