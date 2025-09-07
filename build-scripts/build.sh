@@ -280,4 +280,38 @@ log_warn "⚠️  Remember: Only use on supported Roblox platforms"
 echo ""
 
 # Next steps
-case
+case $PLATFORM in
+    windows)
+        echo -e "${CYAN}Next steps:${NC}"
+        echo "1. Run as Administrator: build/$BUILD_TYPE/RobloxOptimizer.exe"
+        echo "2. Open Roblox before running optimizer"
+        echo "3. Select 'Auto Optimize' option"
+        echo "4. Enjoy improved performance! 🚀"
+        ;;
+    android)
+        echo -e "${CYAN}Next steps:${NC}"
+        echo "1. Install APK on Android 8.0+ device"
+        echo "2. Grant necessary permissions"
+        echo "3. Run optimizer before launching Roblox"
+        echo "4. Tap 'Optimize' and enjoy smooth gameplay! 📱"
+        ;;
+esac
+
+echo ""
+log_info "📖 See README.md for detailed usage instructions"
+log_info "🐛 Report issues at: https://github.com/darkduy/optimize-roblox/issues"
+echo ""
+
+# Warning for unsupported platforms
+echo -e "${YELLOW}⚠️  Platform Compatibility Warning:${NC}"
+echo "   This optimizer ONLY works on platforms where Roblox runs:"
+echo "   • Windows 10 version 1903+ or Windows 11 (x64 only)"
+echo "   • Android 8.0 Oreo+ (API 26+, ARM64/x86_64)"
+echo ""
+echo "   Unsupported platforms:"
+echo "   ❌ Windows 7/8/8.1 (Roblox discontinued support)"
+echo "   ❌ 32-bit Windows (Roblox requires 64-bit)"
+echo "   ❌ Android 7.x and below (performance limitations)"
+echo "   ❌ Linux/macOS (Roblox not available)"
+
+exit 0
