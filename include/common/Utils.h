@@ -1,8 +1,9 @@
-// include/common/Utils.h
+// include/common/Utils.h - Utility functions
 #pragma once
+
 #include <string>
 #include <vector>
-#include <chrono>
+#include <cstdint>
 
 class Utils {
 public:
@@ -12,7 +13,7 @@ public:
     static std::string toLowerCase(const std::string& str);
     static std::string toUpperCase(const std::string& str);
     
-    // File utilities
+    // File utilities  
     static bool fileExists(const std::string& path);
     static std::string readFile(const std::string& path);
     static bool writeFile(const std::string& path, const std::string& content);
