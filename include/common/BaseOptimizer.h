@@ -1,8 +1,8 @@
-// include/common/BaseOptimizer.h
+// include/common/BaseOptimizer.h - Base class definition
 #pragma once
+
 #include <string>
-#include <vector>
-#include <functional>
+#include <cstdint>
 
 struct ProcessInfo {
     uint32_t pid;
@@ -10,24 +10,29 @@ struct ProcessInfo {
     uint64_t memoryUsage;
     double cpuUsage;
     bool isRunning;
+    
+    ProcessInfo() : pid(0), memoryUsage(0), cpuUsage(0.0), isRunning(false) {}
 };
 
 struct OptimizationResult {
     bool success;
     std::string message;
     std::string details;
+    
+    OptimizationResult() : success(false) {}
+    OptimizationResult(bool s, const std::string& m, const std::string& d = "") 
+        : success(s), message(m), details(d) {}
 };
 
 class BaseOptimizer {
 protected:
     bool isOptimizing;
-    std::vector<std::function<void(const std::string&)>> statusCallbacks;
     
 public:
-    BaseOptimizer();
-    virtual ~BaseOptimizer();
+    BaseOptimizer() : isOptimizing(false) {}
+    virtual ~BaseOptimizer() = default;
     
-    // Pure virtual methods - must be implemented by platform
+    // Pure virtual methods - platform specific
     virtual bool findRobloxProcess() = 0;
     virtual OptimizationResult optimizeProcessPriority() = 0;
     virtual OptimizationResult optimizeMemory() = 0;
@@ -35,14 +40,7 @@ public:
     virtual ProcessInfo getProcessInfo() = 0;
     
     // Common methods
-    virtual void startOptimization();
-    virtual void stopOptimization();
-    virtual bool isRunning() const;
-    
-    // Callback registration
-    void registerStatusCallback(std::function<void(const std::string&)> callback);
-    void clearStatusCallbacks();
-    
-protected:
-    void notifyStatusChange(const std::string& status);
+    virtual void startOptimization() { isOptimizing = true; }
+    virtual void stopOptimization() { isOptimizing = false; }
+    virtual bool isRunning() const { return isOptimizing; }
 };
