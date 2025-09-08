@@ -1,5 +1,6 @@
-// include/common/Logger.h
+// include/common/Logger.h - Logger class definition  
 #pragma once
+
 #include <string>
 #include <fstream>
 #include <mutex>
@@ -32,13 +33,12 @@ public:
     void warning(const std::string& message);
     void error(const std::string& message);
     
-    // Prevent cloning
     Logger(Logger &other) = delete;
     void operator=(const Logger &) = delete;
 };
 
-// Macro definitions for easy logging
+// Convenience macros
 #define LOG_DEBUG(msg) Logger::getInstance()->debug(msg)
-#define LOG_INFO(msg) Logger::getInstance()->info(msg)
+#define LOG_INFO(msg) Logger::getInstance()->info(msg)  
 #define LOG_WARNING(msg) Logger::getInstance()->warning(msg)
 #define LOG_ERROR(msg) Logger::getInstance()->error(msg)
