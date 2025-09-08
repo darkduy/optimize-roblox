@@ -1,5 +1,6 @@
-// include/common/Config.h
+// include/common/Config.h - Configuration management
 #pragma once
+
 #include <string>
 #include <map>
 #include <mutex>
@@ -38,7 +39,6 @@ public:
     void removeKey(const std::string& key);
     void clear();
     
-    // Prevent cloning
     Config(Config &other) = delete;
     void operator=(const Config &) = delete;
 };
