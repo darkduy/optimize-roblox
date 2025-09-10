@@ -243,22 +243,191 @@ jobs:
     runs-on: ubuntu-22.04
     
     steps:
-    - name: Build Summary
+    - name: Enhanced Build Summary
       run: |
-        echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## 🏗️ Enhanced Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🎯 Supported Platforms" >> $GITHUB_STEP_SUMMARY
-        echo "| Platform | Status | Requirements |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|--------|--------------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Windows x64 | ${{ needs.build-windows.result == 'success' && '✅ Success' || '❌ Failed' }} | Windows 10/11 only |" >> $GITHUB_STEP_SUMMARY
-        echo "| Android ARM64 | ${{ needs.build-android.result == 'success' && '✅ Success' || '❌ Failed' }} | Android 8.0+ (API 26+) |" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎯 Build Results" >> $GITHUB_STEP_SUMMARY
+        echo "| Platform | Architecture | Release | Debug | Status | Details |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|--------------|---------|-------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+        
+        # Windows build status
+        WINDOWS_STATUS="${{ needs.build-windows.result }}"
+        if [ "$WINDOWS_STATUS" = "success" ]; then
+          echo "| Windows | x64 | ✅ | ✅ | 🟢 Success | All builds completed |" >> $GITHUB_STEP_SUMMARY
+        elif [ "$WINDOWS_STATUS" = "failure" ]; then
+          echo "| Windows | x64 | ❌ | ❌ | 🔴 Failed | Check logs for details |" >> $GITHUB_STEP_SUMMARY
+        elif [ "$WINDOWS_STATUS" = "cancelled" ]; then
+          echo "| Windows | x64 | ⏹️ | ⏹️ | 🟡 Cancelled | Build was cancelled |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| Windows | x64 | ❓ | ❓ | 🟠 Skipped | Build was skipped |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Android build status
+        ANDROID_STATUS="${{ needs.build-android.result }}"
+        if [ "$ANDROID_STATUS" = "success" ]; then
+          echo "| Android | ARM64/x64 | ✅ | ✅ | 🟢 Success | All ABIs built successfully |" >> $GITHUB_STEP_SUMMARY
+        elif [ "$ANDROID_STATUS" = "failure" ]; then
+          echo "| Android | ARM64/x64 | ❌ | ❌ | 🔴 Failed | NDK/CMake configuration issues |" >> $GITHUB_STEP_SUMMARY
+        elif [ "$ANDROID_STATUS" = "cancelled" ]; then
+          echo "| Android | ARM64/x64 | ⏹️ | ⏹️ | 🟡 Cancelled | Build was cancelled |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| Android | ARM64/x64 | ❓ | ❓ | 🟠 Skipped | Build was skipped |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### ❌ Unsupported Platforms" >> $GITHUB_STEP_SUMMARY
-        echo "- Windows 7/8/8.1 (Roblox discontinued)" >> $GITHUB_STEP_SUMMARY
-        echo "- 32-bit Windows (Roblox discontinued)" >> $GITHUB_STEP_SUMMARY
-        echo "- Android 7.x and below (limited performance)" >> $GITHUB_STEP_SUMMARY
-        echo "- Linux (Roblox not available)" >> $GITHUB_STEP_SUMMARY
+        
+        # Overall status
+        if [ "$WINDOWS_STATUS" = "success" ] && [ "$ANDROID_STATUS" = "success" ]; then
+          echo "### 🎉 Overall Status: ALL BUILDS SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Ready for release!** All platforms built successfully." >> $GITHUB_STEP_SUMMARY
+        elif [ "$WINDOWS_STATUS" = "success" ] || [ "$ANDROID_STATUS" = "success" ]; then
+          echo "### ⚠️ Overall Status: PARTIAL SUCCESS" >> $GITHUB_STEP_SUMMARY
+          echo "Some platforms built successfully, others failed." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### 🚨 Overall Status: BUILD FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "All builds failed. Check individual job logs for details." >> $GITHUB_STEP_SUMMARY
+        fi
+        
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📦 Build Artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- **Windows**: RobloxOptimizer.exe (x64 only)" >> $GITHUB_STEP_SUMMARY
-        echo "- **Android**: libRobloxOptimizerAndroid.so (ARM64, x86_64)" >> $GITHUB_STEP_SUMMARY
+        
+        # Build artifacts info
+        echo "### 📦 Expected Build Artifacts" >> $GITHUB_STEP_SUMMARY
+        if [ "$WINDOWS_STATUS" = "success" ]; then
+          echo "#### 🖥️ Windows Artifacts:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`roblox-optimizer-windows-x64-Release\` - Production ready" >> $GITHUB_STEP_SUMMARY
+          echo "- \`roblox-optimizer-windows-x64-Debug\` - Development/testing" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files**: \`RobloxOptimizer.exe\`, \`README.md\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "$ANDROID_STATUS" = "success" ]; then
+          echo "#### 📱 Android Artifacts:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`roblox-optimizer-android-arm64-v8a-Release\` - ARM64 devices" >> $GITHUB_STEP_SUMMARY
+          echo "- \`roblox-optimizer-android-x86_64-Release\` - x86_64 devices" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files**: \`libRobloxOptimizerAndroid.so\`, \`README.md\`, \`ANDROID_INFO.txt\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Troubleshooting section
+        echo "### 🔧 Troubleshooting" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$WINDOWS_STATUS" != "success" ]; then
+          echo "#### Windows Build Issues:" >> $GITHUB_STEP_SUMMARY
+          echo "- **CMake configuration failed**: Check Visual Studio version and CMake path" >> $GITHUB_STEP_SUMMARY
+          echo "- **Compilation errors**: Verify C++17 compatibility and Windows SDK" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linking errors**: Check library dependencies (psapi, advapi32, etc.)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Missing files**: Ensure all source files are present in \`src/\` directories" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "$ANDROID_STATUS" != "success" ]; then
+          echo "#### Android Build Issues:" >> $GITHUB_STEP_SUMMARY
+          echo "- **NDK not found**: Android NDK 25.2.9519653 installation failed" >> $GITHUB_STEP_SUMMARY
+          echo "- **CMake toolchain**: \`android.toolchain.cmake\` not accessible" >> $GITHUB_STEP_SUMMARY
+          echo "- **API Level**: Minimum API 26 (Android 8.0+) required" >> $GITHUB_STEP_SUMMARY
+          echo "- **JNI errors**: Check JNI function signatures and native method exports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Platform compatibility reminder
+        echo "### 🎯 Platform Compatibility" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### ✅ Supported Platforms:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Windows**: 10 version 1903+, Windows 11 (x64 only)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Android**: 8.0 Oreo+ (API 26+), ARM64 & x86_64 architectures" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### ❌ Unsupported Platforms:" >> $GITHUB_STEP_SUMMARY
+        echo "- Windows 7/8/8.1 - Roblox discontinued support" >> $GITHUB_STEP_SUMMARY
+        echo "- 32-bit Windows - Roblox requires 64-bit" >> $GITHUB_STEP_SUMMARY
+        echo "- Android 7.x and below - Performance and security limitations" >> $GITHUB_STEP_SUMMARY
+        echo "- Linux/macOS - Roblox not officially available" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Quick actions
+        echo "### ⚡ Quick Actions" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "$WINDOWS_STATUS" = "success" ] || [ "$ANDROID_STATUS" = "success" ]; then
+          echo "✅ **Download artifacts** from the Actions summary page" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Test the builds** on target platforms" >> $GITHUB_STEP_SUMMARY
+          if [ "$WINDOWS_STATUS" = "success" ] && [ "$ANDROID_STATUS" = "success" ]; then
+            echo "✅ **Create a release** tag to trigger release packaging" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        if [ "$WINDOWS_STATUS" != "success" ] || [ "$ANDROID_STATUS" != "success" ]; then
+          echo "🔍 **Check individual job logs** for detailed error messages" >> $GITHUB_STEP_SUMMARY
+          echo "🔧 **Fix source code issues** and push new commits" >> $GITHUB_STEP_SUMMARY
+          echo "📝 **Update CMakeLists.txt** if configuration problems persist" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "*Build completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
+        echo "*Commit: ${{ github.sha }}*" >> $GITHUB_STEP_SUMMARY
+        echo "*Workflow: ${{ github.workflow }} #${{ github.run_number }}*" >> $GITHUB_STEP_SUMMARY
+
+    - name: Post build status to PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const windowsStatus = '${{ needs.build-windows.result }}';
+          const androidStatus = '${{ needs.build-android.result }}';
+          
+          let emoji = '';
+          let status = '';
+          let details = '';
+          
+          if (windowsStatus === 'success' && androidStatus === 'success') {
+            emoji = '✅';
+            status = 'All builds successful';
+            details = 'Windows and Android builds completed successfully.';
+          } else if (windowsStatus === 'success' || androidStatus === 'success') {
+            emoji = '⚠️';
+            status = 'Partial build success';
+            details = `Windows: ${windowsStatus}, Android: ${androidStatus}`;
+          } else {
+            emoji = '❌';
+            status = 'All builds failed';
+            details = `Windows: ${windowsStatus}, Android: ${androidStatus}`;
+          }
+          
+          const comment = `## ${emoji} Build Status: ${status}
+          
+**Platform Results:**
+- 🖥️ Windows x64: \`${windowsStatus}\`
+- 📱 Android (ARM64/x64): \`${androidStatus}\`
+
+**Details:** ${details}
+
+**Artifacts:** ${windowsStatus === 'success' || androidStatus === 'success' ? 'Available in Actions summary' : 'No artifacts generated'}
+
+**Commit:** ${context.sha.substring(0, 7)}
+**Workflow:** [#${context.runNumber}](${context.payload.repository.html_url}/actions/runs/${context.runId})`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+    - name: Build failure notification
+      if: needs.build-windows.result == 'failure' || needs.build-android.result == 'failure'
+      run: |
+        echo "🚨 BUILD FAILURE DETECTED"
+        echo "Windows Status: ${{ needs.build-windows.result }}"
+        echo "Android Status: ${{ needs.build-android.result }}"
+        echo ""
+        echo "Common solutions:"
+        echo "1. Check CMakeLists.txt for syntax errors"
+        echo "2. Verify all source files exist and compile"
+        echo "3. Check platform-specific dependencies"
+        echo "4. Review job logs for detailed error messages"
+        echo ""
+        echo "For support: https://github.com/darkduy/optimize-roblox/issues"
+        
+        # Exit with error to mark this step as failed for visibility
+        exit 1
